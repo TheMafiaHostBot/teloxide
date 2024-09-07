@@ -1,7 +1,43 @@
 //!
+use crate::{requests::Requester, stop::StopFlag, types::InputFile};
+use ::axum::routing::MethodRouter;
 use std::net::SocketAddr;
+use teloxide_core::types::Update;
+use tokio::sync::mpsc;
 
-use crate::{requests::Requester, types::InputFile};
+type UpdateCSender = ClosableSender<Result<Update, std::convert::Infallible>>;
+
+#[derive(Clone)]
+pub struct WebhookState {
+    tx: UpdateCSender,
+    flag: StopFlag,
+    secret: Option<String>,
+}
+
+/// A terrible workaround to drop axum extension
+struct ClosableSender<T> {
+    origin: std::sync::Arc<std::sync::RwLock<Option<mpsc::UnboundedSender<T>>>>,
+}
+
+impl<T> Clone for ClosableSender<T> {
+    fn clone(&self) -> Self {
+        Self { origin: self.origin.clone() }
+    }
+}
+
+impl<T> ClosableSender<T> {
+    fn new(sender: mpsc::UnboundedSender<T>) -> Self {
+        Self { origin: std::sync::Arc::new(std::sync::RwLock::new(Some(sender))) }
+    }
+
+    fn get(&self) -> Option<mpsc::UnboundedSender<T>> {
+        self.origin.read().unwrap().clone()
+    }
+
+    fn close(&mut self) {
+        self.origin.write().unwrap().take();
+    }
+}
 
 /// Options related to setting up webhooks.
 #[must_use]
@@ -58,6 +94,10 @@ pub struct Options {
     ///
     /// Default - `teloxide` will generate a random token.
     pub secret_token: Option<String>,
+
+    /// Patched
+    /// Specify custom routes attached next to the webhook path
+    pub extra_routes: Vec<(&'static str, MethodRouter<WebhookState>)>,
 }
 
 impl Options {
@@ -73,6 +113,7 @@ impl Options {
             max_connections: None,
             drop_pending_updates: false,
             secret_token: None,
+            extra_routes: Vec::new(),
         }
     }
 

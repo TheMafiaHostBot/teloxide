@@ -8,9 +8,11 @@ use tokio::sync::mpsc;
 
 use crate::{
     requests::Requester,
-    stop::StopFlag,
     types::{Update, UpdateKind},
-    update_listeners::{webhooks::Options, UpdateListener},
+    update_listeners::{
+        webhooks::{ClosableSender, Options, WebhookState},
+        UpdateListener,
+    },
 };
 
 /// Webhook implementation based on the [mod@axum] framework.
@@ -212,14 +214,18 @@ pub fn axum_no_setup(
 
     let (stop_token, stop_flag) = mk_stop_token();
 
-    let app = axum::Router::new()
-        .route(&options.path, post(telegram_request))
-        .layer(TraceLayer::new_for_http())
-        .with_state(WebhookState {
-            tx: ClosableSender::new(tx),
-            flag: stop_flag.clone(),
-            secret: options.secret_token,
-        });
+    let app = axum::Router::new();
+    let mut app = app.route(&options.path, post(telegram_request));
+
+    for (route, handler) in options.extra_routes {
+        app = app.route(route, handler);
+    }
+
+    let app = app.layer(TraceLayer::new_for_http()).with_state(WebhookState {
+        tx: ClosableSender::new(tx),
+        flag: stop_flag.clone(),
+        secret: options.secret_token,
+    });
 
     let stream = UnboundedReceiverStream::new(rx);
 
@@ -234,39 +240,6 @@ pub fn axum_no_setup(
 }
 
 type UpdateSender = mpsc::UnboundedSender<Result<Update, std::convert::Infallible>>;
-type UpdateCSender = ClosableSender<Result<Update, std::convert::Infallible>>;
-
-#[derive(Clone)]
-struct WebhookState {
-    tx: UpdateCSender,
-    flag: StopFlag,
-    secret: Option<String>,
-}
-
-/// A terrible workaround to drop axum extension
-struct ClosableSender<T> {
-    origin: std::sync::Arc<std::sync::RwLock<Option<mpsc::UnboundedSender<T>>>>,
-}
-
-impl<T> Clone for ClosableSender<T> {
-    fn clone(&self) -> Self {
-        Self { origin: self.origin.clone() }
-    }
-}
-
-impl<T> ClosableSender<T> {
-    fn new(sender: mpsc::UnboundedSender<T>) -> Self {
-        Self { origin: std::sync::Arc::new(std::sync::RwLock::new(Some(sender))) }
-    }
-
-    fn get(&self) -> Option<mpsc::UnboundedSender<T>> {
-        self.origin.read().unwrap().clone()
-    }
-
-    fn close(&mut self) {
-        self.origin.write().unwrap().take();
-    }
-}
 
 struct XTelegramBotApiSecretToken(Option<Vec<u8>>);
 
