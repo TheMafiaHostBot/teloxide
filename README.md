@@ -1,3 +1,18 @@
+# Patched teloxide
+
+## Sync gide
+1. Sync `master` branch, it should always be synced with original repo
+2. Merge master with `patched` branch and resolve conflicts if they are exist
+
+## Diffs
+* Updated README.md
+* Support for custom webhook endpoint
+
+# Original README.md: 
+<br/>
+<br/>
+
+
 <div align="center">
   <img src="./media/teloxide-logo.png" width="250"/>
   <h1><code>teloxide</code></h1>
