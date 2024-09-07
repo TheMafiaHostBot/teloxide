@@ -1,8 +1,8 @@
 # Patched teloxide
 
-## Sync gide
-1. Sync `master` branch, it should always be synced with original repo
-2. Merge master with `patched` branch and resolve conflicts if they are exist
+## Sync guide
+1. Sync the `master` branch, it should always be synced with the original repo
+2. Merge master into the `patched` branch and resolve conflicts if they exist
 
 ## Diffs
 * Updated README.md
